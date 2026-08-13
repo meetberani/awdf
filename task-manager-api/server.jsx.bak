@@ -1,0 +1,128 @@
+const express = require("express");
+
+const app = express();
+
+app.use(express.json());
+
+// Temporary data
+let tasks = [
+    {
+        id: 1,
+        title: "Learn Node.js",
+        completed: false
+    },
+    {
+        id: 2,
+        title: "Practice Express",
+        completed: true
+    }
+];
+
+// ===============================
+// GET - Get all tasks
+// ===============================
+app.get("/tasks", (req, res) => {
+    res.status(200).json(tasks);
+});
+
+// ===============================
+// GET - Get task by ID
+// ===============================
+app.get("/tasks/:id", (req, res) => {
+    const id = parseInt(req.params.id);
+
+    const task = tasks.find(t => t.id === id);
+
+    if (!task) {
+        return res.status(404).json({
+            message: "Task not found"
+        });
+    }
+
+    res.status(200).json(task);
+});
+
+// ===============================
+// POST - Create new task
+// ===============================
+app.post("/tasks", (req, res) => {
+    const { title, completed } = req.body;
+
+    if (!title) {
+        return res.status(400).json({
+            message: "Title is required"
+        });
+    }
+
+    const newTask = {
+        id: tasks.length + 1,
+        title: title,
+        completed: completed || false
+    };
+
+    tasks.push(newTask);
+
+    res.status(201).json({
+        message: "Task created successfully",
+        task: newTask
+    });
+});
+
+// ===============================
+// PUT - Update task
+// ===============================
+app.put("/tasks/:id", (req, res) => {
+    const id = parseInt(req.params.id);
+
+    const task = tasks.find(t => t.id === id);
+
+    if (!task) {
+        return res.status(404).json({
+            message: "Task not found"
+        });
+    }
+
+    const { title, completed } = req.body;
+
+    if (title !== undefined) {
+        task.title = title;
+    }
+
+    if (completed !== undefined) {
+        task.completed = completed;
+    }
+
+    res.status(200).json({
+        message: "Task updated successfully",
+        task: task
+    });
+});
+
+// ===============================
+// DELETE - Delete task
+// ===============================
+app.delete("/tasks/:id", (req, res) => {
+    const id = parseInt(req.params.id);
+
+    const index = tasks.findIndex(t => t.id === id);
+
+    if (index === -1) {
+        return res.status(404).json({
+            message: "Task not found"
+        });
+    }
+
+    const deletedTask = tasks.splice(index, 1);
+
+    res.status(200).json({
+        message: "Task deleted successfully",
+        task: deletedTask[0]
+    });
+});
+
+// ===============================
+// Start server
+// ===============================
+app.listen(5000, () => {
+    console.log("Server running on port 5000");
+});
