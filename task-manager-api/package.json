@@ -7,14 +7,21 @@
     "start": "node server.js",
     "test": "echo \"No tests specified\""
   },
-  "keywords": ["express", "node", "api", "rest"],
+  "keywords": [
+    "express",
+    "node",
+    "api",
+    "rest"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "cors": "^2.8.6",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.1.4",
     "express": "^5.2.1",
-    "cors": "^2.8.5",
-    "mongoose": "^7.4.0",
-    "dotenv": "^16.1.4"
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.4.0"
   }
 }

@@ -3,7 +3,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const Task = require('./models/Task');
+const User = require('./models/User');
 
 const app = express();
 
@@ -23,6 +26,7 @@ app.use((req, res, next) => {
 });
 
 const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/taskmanager';
+const jwtSecret = process.env.JWT_SECRET;
 
 mongoose.connect(mongoUri)
     .then(() => console.log('Connected to MongoDB'))
@@ -35,10 +39,79 @@ const validateTaskId = (req, res, next) => {
     next();
 };
 
+const requireAuth = (req, res, next) => {
+    if (!jwtSecret) return res.status(500).json({ error: 'JWT_SECRET is not configured' });
+
+    const authorization = req.headers.authorization || '';
+    const [scheme, token] = authorization.split(' ');
+    if (scheme !== 'Bearer' || !token) {
+        return res.status(401).json({ error: 'Authorization token is required' });
+    }
+
+    try {
+        req.user = jwt.verify(token, jwtSecret);
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+};
+
+const validateCredentials = (req, res, next) => {
+    const { email, password } = req.body || {};
+    if (typeof email !== 'string' || !email.trim()) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    if (typeof password !== 'string' || password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    req.credentials = { email: email.trim().toLowerCase(), password };
+    next();
+};
+
+const publicUser = (user) => ({ id: user._id, email: user.email });
+
+const createToken = (user) => jwt.sign({ id: user._id.toString(), email: user.email }, jwtSecret, { expiresIn: '1h' });
+
+app.post('/auth/register', validateCredentials, async (req, res, next) => {
+    try {
+        if (!jwtSecret) return res.status(500).json({ error: 'JWT_SECRET is not configured' });
+        const existingUser = await User.findOne({ email: req.credentials.email });
+        if (existingUser) return res.status(409).json({ error: 'An account with that email already exists' });
+
+        const password = await bcrypt.hash(req.credentials.password, 10);
+        const user = await User.create({ email: req.credentials.email, password });
+        res.status(201).json({ user: publicUser(user), token: createToken(user) });
+    } catch (err) {
+        next(err);
+    }
+});
+
+app.post('/auth/login', validateCredentials, async (req, res, next) => {
+    try {
+        if (!jwtSecret) return res.status(500).json({ error: 'JWT_SECRET is not configured' });
+        const user = await User.findOne({ email: req.credentials.email }).select('+password');
+        const isMatch = user && await bcrypt.compare(req.credentials.password, user.password);
+        if (!isMatch) return res.status(401).json({ error: 'Invalid email or password' });
+        res.status(200).json({ user: publicUser(user), token: createToken(user) });
+    } catch (err) {
+        next(err);
+    }
+});
+
+app.get('/me', requireAuth, async (req, res, next) => {
+    try {
+        const user = await User.findById(req.user.id).lean();
+        if (!user) return res.status(401).json({ error: 'User account no longer exists' });
+        res.status(200).json({ user: publicUser(user) });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // ===============================
 // GET - Get all tasks
 // ===============================
-app.get('/tasks', async (req, res, next) => {
+app.get('/tasks', requireAuth, async (req, res, next) => {
     try {
         const all = await Task.find().sort({ createdAt: 1 }).lean();
         res.status(200).json(all);
@@ -50,7 +123,7 @@ app.get('/tasks', async (req, res, next) => {
 // ===============================
 // GET - Get task by ID
 // ===============================
-app.get('/tasks/:id', validateTaskId, async (req, res, next) => {
+app.get('/tasks/:id', requireAuth, validateTaskId, async (req, res, next) => {
     try {
         const task = await Task.findById(req.params.id).lean();
         if (!task) return res.status(404).json({ error: 'Task not found' });
@@ -63,7 +136,7 @@ app.get('/tasks/:id', validateTaskId, async (req, res, next) => {
 // ===============================
 // POST - Create new task
 // ===============================
-app.post('/tasks', async (req, res, next) => {
+app.post('/tasks', requireAuth, async (req, res, next) => {
     try {
         const { title, completed } = req.body;
         if (!title || typeof title !== 'string' || title.trim() === '') {
@@ -79,7 +152,7 @@ app.post('/tasks', async (req, res, next) => {
 // ===============================
 // PUT - Update task
 // ===============================
-app.put('/tasks/:id', validateTaskId, async (req, res, next) => {
+app.put('/tasks/:id', requireAuth, validateTaskId, async (req, res, next) => {
     try {
         const updates = {};
         const { title, completed } = req.body;
@@ -100,7 +173,7 @@ app.put('/tasks/:id', validateTaskId, async (req, res, next) => {
 // ===============================
 // DELETE - Delete task
 // ===============================
-app.delete('/tasks/:id', validateTaskId, async (req, res, next) => {
+app.delete('/tasks/:id', requireAuth, validateTaskId, async (req, res, next) => {
     try {
         const deleted = await Task.findByIdAndDelete(req.params.id).lean();
         if (!deleted) return res.status(404).json({ error: 'Task not found' });

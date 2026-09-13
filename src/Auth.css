@@ -1,0 +1,12 @@
+.auth-container { max-width: 420px; margin: 72px auto; padding: 36px; text-align: left; border: 1px solid #e1e9f2; border-radius: 14px; background: #fff; box-shadow: 0 18px 50px rgba(12, 23, 40, .08); }
+.auth-kicker { color: #2b7cff; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; }
+.auth-container h1 { margin: 10px 0 8px; font-size: 30px; color: #0b2545; }
+.auth-copy { color: #6b7788; margin-bottom: 26px; }
+.auth-form { display: grid; gap: 16px; }
+.auth-form label { display: grid; gap: 7px; color: #29415d; font-size: 14px; font-weight: 700; }
+.auth-form input { box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #d9e3ee; border-radius: 8px; font: inherit; }
+.auth-form button { padding: 12px; border: 0; border-radius: 8px; background: #1157d6; color: #fff; font-weight: 700; cursor: pointer; }
+.auth-form button:disabled { opacity: .6; cursor: wait; }
+.auth-error { padding: 10px; border: 1px solid #ffd4d8; border-radius: 8px; color: #b00020; background: #fff1f2; font-size: 14px; }
+.auth-switch { margin-top: 20px; padding: 0; border: 0; background: transparent; color: #1157d6; cursor: pointer; }
+@media (max-width: 520px) { .auth-container { margin: 30px 14px; padding: 24px; } }

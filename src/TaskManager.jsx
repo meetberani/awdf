@@ -1,30 +1,31 @@
 import { useEffect, useState } from "react";
+import { createTask, deleteTask, getTasks, updateTask } from "./api";
 import "./TaskManager.css";
+
+function getId(task) {
+  return task?._id || task?.id;
+}
 
 export default function TaskManager() {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState("");
 
-  const API = "http://127.0.0.1:5000/tasks";
+  function showNotice(message) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2600);
+  }
 
-  const getId = (taskOrId) => {
-    if (!taskOrId) return taskOrId;
-    // accept either a task object or a raw id string/number
-    if (typeof taskOrId === 'string' || typeof taskOrId === 'number') return taskOrId;
-    return taskOrId._id || taskOrId.id;
-  };
   async function loadTasks() {
     setLoading(true);
-    setError(null);
+    setError("");
     try {
-      const res = await fetch(API);
-      if (!res.ok) throw new Error(`Status ${res.status}`);
-      const data = await res.json();
-      setTasks(data);
+      setTasks(await getTasks());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -36,54 +37,69 @@ export default function TaskManager() {
     loadTasks();
   }, []);
 
-  async function handleAdd(e) {
-    e.preventDefault();
-    if (!title.trim()) return;
+  async function handleAdd(event) {
+    event.preventDefault();
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      setError("Title is required");
+      return;
+    }
+
+    const temporaryId = `temporary-${Date.now()}`;
+    const optimisticTask = { id: temporaryId, title: cleanTitle, completed: false };
+    setTasks((current) => [...current, optimisticTask]);
+    setTitle("");
+    setError("");
+    setBusyId(temporaryId);
+
     try {
-      const res = await fetch(API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), completed: false }),
-      });
-      if (!res.ok) throw new Error(`Create failed ${res.status}`);
-      const json = await res.json();
-      setTasks((t) => [...t, json.task]);
-      setTitle("");
+      const result = await createTask({ title: cleanTitle, completed: false });
+      setTasks((current) => current.map((task) => (getId(task) === temporaryId ? result.task : task)));
+      showNotice("Task created successfully");
     } catch (err) {
+      setTasks((current) => current.filter((task) => getId(task) !== temporaryId));
       setError(err.message);
+    } finally {
+      setBusyId(null);
     }
   }
 
   async function handleToggle(task) {
+    const id = getId(task);
+    setBusyId(id);
+    setError("");
     try {
-      const id = getId(task);
-      const res = await fetch(`${API}/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ completed: !task.completed }),
-      });
-      if (!res.ok) throw new Error(`Update failed ${res.status}`);
-      const json = await res.json();
-      setTasks((list) => list.map((t) => (getId(t) === id ? json.task : t)));
+      const result = await updateTask(id, { completed: !task.completed });
+      setTasks((current) => current.map((item) => (getId(item) === id ? result.task : item)));
+      showNotice("Task updated successfully");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyId(null);
     }
   }
 
-  async function handleDelete(idOrTask) {
-    const id = getId(idOrTask);
+  async function handleDelete(task) {
+    if (!window.confirm(`Delete "${task.title}"?`)) return;
+
+    const id = getId(task);
+    setBusyId(id);
+    setError("");
     try {
-      const res = await fetch(`${API}/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed ${res.status}`);
-      setTasks((list) => list.filter((t) => getId(t) !== id));
+      await deleteTask(id);
+      setTasks((current) => current.filter((item) => getId(item) !== id));
+      showNotice("Task deleted successfully");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyId(null);
     }
   }
 
   function startEdit(task) {
     setEditingId(getId(task));
     setEditingTitle(task.title);
+    setError("");
   }
 
   function cancelEdit() {
@@ -91,79 +107,89 @@ export default function TaskManager() {
     setEditingTitle("");
   }
 
-  async function saveEdit(idOrTask) {
-    const id = getId(idOrTask);
-    if (!editingTitle.trim()) return alert("Title cannot be empty");
+  async function saveEdit(task) {
+    const cleanTitle = editingTitle.trim();
+    if (!cleanTitle) {
+      setError("Title cannot be empty");
+      return;
+    }
+
+    const id = getId(task);
+    setBusyId(id);
+    setError("");
     try {
-      const res = await fetch(`${API}/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: editingTitle.trim() }),
-      });
-      if (!res.ok) throw new Error(`Update failed ${res.status}`);
-      const json = await res.json();
-      setTasks((list) => list.map((t) => (getId(t) === id ? json.task : t)));
+      const result = await updateTask(id, { title: cleanTitle });
+      setTasks((current) => current.map((item) => (getId(item) === id ? result.task : item)));
       cancelEdit();
+      showNotice("Task updated successfully");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyId(null);
     }
   }
 
   return (
-    <div className="tm-container">
-      <h2 className="tm-title">Task Manager</h2>
+    <main className="tm-container">
+      <div className="tm-heading">
+        <div>
+          <p className="tm-kicker">FULL-STACK WORKSPACE</p>
+          <h2 className="tm-title">Task Manager</h2>
+        </div>
+        <span className="tm-count">{tasks.length} tasks</span>
+      </div>
 
       <form onSubmit={handleAdd} className="tm-form">
         <input
           className="tm-input"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="New task title"
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="What needs doing?"
+          aria-label="New task title"
         />
-        <button className="tm-button" type="submit">Add</button>
+        <button className="tm-button" type="submit" disabled={busyId?.startsWith("temporary-")}>Add task</button>
       </form>
 
-      {error && <div className="tm-error">Error: {error}</div>}
+      {notice && <div className="tm-toast" role="status">{notice}</div>}
+      {error && <div className="tm-error" role="alert">{error}</div>}
 
       {loading ? (
-        <div className="tm-loading">Loading...</div>
+        <div className="tm-loading">Loading tasks...</div>
+      ) : tasks.length === 0 ? (
+        <div className="tm-empty">No tasks yet. Add your first one above.</div>
       ) : (
         <ul className="tm-list">
-          {tasks.map((task) => (
-            <li key={getId(task)} className={`tm-item ${task.completed ? 'completed' : ''}`}>
-              <label className="tm-item-left">
-                <input
-                  type="checkbox"
-                  checked={task.completed}
-                  onChange={() => handleToggle(task)}
-                />
-                <div>
-                  {editingId === getId(task) ? (
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <input value={editingTitle} onChange={(e) => setEditingTitle(e.target.value)} />
-                      <button type="button" className="tm-button tm-small" onClick={() => saveEdit(task)}>Save</button>
-                      <button type="button" className="tm-button tm-small" onClick={cancelEdit}>Cancel</button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div className="tm-title-text">{task.title}</div>
-                        {task.priority ? <div className="tm-priority">{task.priority}</div> : null}
+          {tasks.map((task) => {
+            const id = getId(task);
+            const isBusy = busyId === id;
+            return (
+              <li key={id} className={`tm-item ${task.completed ? "completed" : ""}`}>
+                <label className="tm-item-left">
+                  <input type="checkbox" checked={task.completed} onChange={() => handleToggle(task)} disabled={isBusy} />
+                  <div className="tm-task-content">
+                    {editingId === id ? (
+                      <div className="tm-edit-row">
+                        <input className="tm-edit-input" value={editingTitle} onChange={(event) => setEditingTitle(event.target.value)} autoFocus />
+                        <button type="button" className="tm-button tm-small" onClick={() => saveEdit(task)} disabled={isBusy}>Save</button>
+                        <button type="button" className="tm-button tm-small tm-muted" onClick={cancelEdit}>Cancel</button>
                       </div>
-                      <div className="tm-meta">{task.createdAt ? new Date(task.createdAt).toLocaleString() : ''}</div>
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <div className="tm-title-text">{task.title}</div>
+                        <div className="tm-meta">{task.createdAt ? new Date(task.createdAt).toLocaleString() : "Pending save..."}</div>
+                      </>
+                    )}
+                  </div>
+                </label>
+                <div className="tm-item-actions">
+                  <button type="button" className="tm-button tm-small tm-muted" onClick={() => startEdit(task)} disabled={isBusy}>Edit</button>
+                  <button type="button" className="tm-button tm-small tm-danger" onClick={() => handleDelete(task)} disabled={isBusy}>Delete</button>
                 </div>
-              </label>
-
-              <div className="tm-item-actions">
-                <button type="button" className="tm-button tm-small" onClick={() => startEdit(task)}>Edit</button>
-                <button type="button" className="tm-button tm-small tm-danger" onClick={() => handleDelete(task)}>Delete</button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
-    </div>
+    </main>
   );
 }

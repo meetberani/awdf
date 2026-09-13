@@ -1,33 +1,42 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from "react";
 import Student from "./student";
-import { Link, Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
 import Project from "./Projects";
 import NavBar from "./NavBar";
 import Contact from "./Contact";
 import TaskManager from "./TaskManager";
+import Auth from "./Auth";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [user, setUser] = useState(() => {
+    const token = localStorage.getItem("task-manager-token");
+    return token ? { email: "Signed in" } : null;
+  });
+
+  useEffect(() => {
+    const expire = () => setUser(null);
+    window.addEventListener("auth-expired", expire);
+    return () => window.removeEventListener("auth-expired", expire);
+  }, []);
+
+  function logout() {
+    localStorage.removeItem("task-manager-token");
+    setUser(null);
+  }
 
   return (
     <>
-           <NavBar />
+      <NavBar user={user} onLogout={logout} />
 
       <Routes>
         <Route path="/" element={<Student />} />
         <Route path="/project" element={<Project />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/tasks" element={<TaskManager />} />
+        <Route path="/login" element={<Auth onAuthenticated={setUser} />} />
+        <Route path="/tasks" element={user ? <TaskManager /> : <Navigate to="/login" replace />} />
       </Routes>
-    
-
-    
     </>
-  )
+  );
 }
 
 export default App
