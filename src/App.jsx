@@ -1,11 +1,20 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import Student from "./student";
 import { Navigate, Routes, Route } from "react-router-dom";
-import Project from "./Projects";
 import NavBar from "./NavBar";
-import Contact from "./Contact";
-import TaskManager from "./TaskManager";
 import Auth from "./Auth";
+
+const Project = lazy(() => import("./Projects"));
+const Contact = lazy(() => import("./Contact"));
+const TaskManager = lazy(() => import("./TaskManager"));
+
+function PageLoading() {
+  return (
+    <div role="status" style={{ padding: "2rem", textAlign: "center" }}>
+      Loading page...
+    </div>
+  );
+}
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -28,13 +37,15 @@ function App() {
     <>
       <NavBar user={user} onLogout={logout} />
 
-      <Routes>
-        <Route path="/" element={<Student />} />
-        <Route path="/project" element={<Project />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/login" element={<Auth onAuthenticated={setUser} />} />
-        <Route path="/tasks" element={user ? <TaskManager /> : <Navigate to="/login" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route path="/" element={<Student />} />
+          <Route path="/project" element={<Project />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/login" element={<Auth onAuthenticated={setUser} />} />
+          <Route path="/tasks" element={user ? <TaskManager /> : <Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     </>
   );
 }

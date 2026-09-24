@@ -8,6 +8,54 @@ Practical 6 full-stack integration: React + Vite frontend, Express/Mongoose back
 React (127.0.0.1:5173) -> Express API (127.0.0.1:5000) -> MongoDB (127.0.0.1:27017/taskmanager)
 ```
 
+## Practical 8: Performance Optimization
+
+The `/project`, `/contact`, and `/tasks` routes use `React.lazy()` and are
+rendered inside `Suspense` with a `Loading page...` fallback. Their JavaScript
+is downloaded when the route is visited instead of being included in the
+initial app chunk.
+
+### Build comparison
+
+Measured with `npm run build` using Vite production output:
+
+| Metric | Before lazy loading | After lazy loading |
+| --- | ---: | ---: |
+| Initial JavaScript | 243.82 kB | 237.55 kB |
+| Initial JavaScript gzip | 77.89 kB | 76.27 kB |
+| Initial CSS | 6.00 kB | 2.82 kB |
+| Route chunks | 0 | Projects: 2.63 kB, Contact: 0.69 kB |
+| Route chunks gzip | 0 | Projects: 1.11 kB, Contact: 0.41 kB |
+
+The authenticated task route is also split into `TaskManager-BRgVdPYj.js`
+(`3.84 kB`, `1.37 kB` gzip) with its `TaskManager-B4b45i9v.css` stylesheet
+(`3.17 kB`, `1.17 kB` gzip). The route chunk values above cover the two
+required portfolio routes; the task chunk is the supplementary optimization.
+
+The initial request is smaller after optimization, while the total eventual
+download remains approximately the same because the route code is deferred,
+not removed. This improves perceived startup performance because the home page
+can become interactive before unused route code is downloaded.
+
+### Browser verification
+
+1. Run `npm run dev` and open the app with browser DevTools Network tab open.
+2. Reload `/` with the cache disabled and record the initial JavaScript request.
+3. Visit `/project` and `/contact`; verify that a separate `Projects-*.js` or
+   `Contact-*.js` request appears only when that route is opened.
+4. Throttle the Network tab to Slow 3G and revisit a route to observe the
+   `Loading page...` fallback while its chunk downloads.
+
+### Key findings
+
+- The initial bundle is downloaded during startup; a lazy chunk is requested
+  only when its route is rendered.
+- Lazy loading improves perceived performance by prioritizing code needed for
+  the first screen, even though a user who visits every route eventually
+  downloads nearly the same total application code.
+- For a very small app, the extra chunks and loading states may add more
+  complexity than the startup savings justify.
+
 ## Prerequisites
 
 - Node.js 18 or newer
