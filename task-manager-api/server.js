@@ -5,10 +5,17 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const NodeCache = require('node-cache');
 const Task = require('./models/Task');
 const User = require('./models/User');
+const taskEvents = require('./events');
+require('./listeners');
 
 const app = express();
+const cacheTtl = Number.parseInt(process.env.TASK_CACHE_TTL_SECONDS || '60', 10);
+const cache = new NodeCache({ stdTTL: Number.isFinite(cacheTtl) && cacheTtl > 0 ? cacheTtl : 60 });
+const cacheEnabled = process.env.TASK_CACHE_ENABLED !== 'false';
+const cacheStats = { hits: 0, misses: 0 };
 
 app.use(cors());
 app.use(express.json());
@@ -113,7 +120,14 @@ app.get('/me', requireAuth, async (req, res, next) => {
 // ===============================
 app.get('/tasks', requireAuth, async (req, res, next) => {
     try {
+        const cachedTasks = cacheEnabled && cache.get('all_tasks');
+        if (cachedTasks) {
+            cacheStats.hits += 1;
+            return res.status(200).json(cachedTasks);
+        }
+        cacheStats.misses += 1;
         const all = await Task.find().sort({ createdAt: 1 }).lean();
+        if (cacheEnabled) cache.set('all_tasks', all);
         res.status(200).json(all);
     } catch (err) {
         next(err);
@@ -125,8 +139,16 @@ app.get('/tasks', requireAuth, async (req, res, next) => {
 // ===============================
 app.get('/tasks/:id', requireAuth, validateTaskId, async (req, res, next) => {
     try {
+        const cacheKey = `task:${req.params.id}`;
+        const cachedTask = cacheEnabled && cache.get(cacheKey);
+        if (cachedTask) {
+            cacheStats.hits += 1;
+            return res.status(200).json(cachedTask);
+        }
+        cacheStats.misses += 1;
         const task = await Task.findById(req.params.id).lean();
         if (!task) return res.status(404).json({ error: 'Task not found' });
+        if (cacheEnabled) cache.set(cacheKey, task);
         res.status(200).json(task);
     } catch (err) {
         next(err);
@@ -143,7 +165,14 @@ app.post('/tasks', requireAuth, async (req, res, next) => {
             return res.status(400).json({ error: 'Title is required' });
         }
         const created = await Task.create({ title: title.trim(), completed: Boolean(completed) });
+        cache.del('all_tasks');
         res.status(201).json({ message: 'Task created successfully', task: created });
+        console.log(`[API] POST /tasks response sent at ${new Date().toISOString()}`);
+        taskEvents.emit('task-created', {
+            title: created.title,
+            createdAt: created.createdAt.toISOString(),
+            assignedUser: req.user.email || req.user.id
+        });
     } catch (err) {
         next(err);
     }
@@ -164,6 +193,7 @@ app.put('/tasks/:id', requireAuth, validateTaskId, async (req, res, next) => {
 
         const updated = await Task.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true }).lean();
         if (!updated) return res.status(404).json({ error: 'Task not found' });
+        cache.del('all_tasks', `task:${req.params.id}`);
         res.status(200).json({ message: 'Task updated successfully', task: updated });
     } catch (err) {
         next(err);
@@ -177,10 +207,20 @@ app.delete('/tasks/:id', requireAuth, validateTaskId, async (req, res, next) => 
     try {
         const deleted = await Task.findByIdAndDelete(req.params.id).lean();
         if (!deleted) return res.status(404).json({ error: 'Task not found' });
+        cache.del('all_tasks', `task:${req.params.id}`);
         res.status(200).json({ message: 'Task deleted successfully', task: deleted });
+        taskEvents.emit('task-deleted', {
+            title: deleted.title,
+            deletedAt: new Date().toISOString(),
+            deletedBy: req.user.email || req.user.id
+        });
     } catch (err) {
         next(err);
     }
+});
+
+app.get('/debug/cache', requireAuth, (req, res) => {
+    res.status(200).json({ ...cacheStats, enabled: cacheEnabled, keys: cache.keys().length, ttlSeconds: cache.options.stdTTL });
 });
 
 app.use((req, res) => {
