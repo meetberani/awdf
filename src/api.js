@@ -53,3 +53,10 @@ export function updateTask(id, updates) {
 export function deleteTask(id) {
   return request(`/tasks/${id}`, { method: "DELETE" });
 }
+
+export function generateAiDescription(title) {
+  return request("/api/ai/generate-description", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}

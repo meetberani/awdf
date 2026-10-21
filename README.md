@@ -414,6 +414,75 @@ The backend API includes automated integration tests in `task-manager-api/server
 5. **Screenshot 5: Status Badge in README on GitHub**
    - GitHub repository homepage showing the live `CI Pipeline: passing` badge.
 
+## Practical 13: AI API Integration into a Web Application (CO6 / PO3, PO5, PO12)
+
+Objective: To integrate an external AI service into the existing application and understand responsible AI usage.
+
+### Architecture
+
+```text
+React Frontend (src/TaskManager.jsx)
+        │
+        │ 1. User clicks "✨ Auto-Generate with AI" (with task title)
+        ▼
+Express Backend (POST /api/ai/generate-description)
+        │
+        │ 2. Server reads API key strictly from process.env (.env)
+        │    Never exposed to the frontend browser!
+        ├──► OpenAI API (gpt-4o-mini) OR Google Gemini API (gemini-1.5-flash)
+        │
+        │ 3. On Failure/Timeout/No Key:
+        │    Graceful degradation catch block returns contextual fallback description
+        ▼
+Response to React: { description, fallback: false/true, disclaimer }
+        │
+        │ 4. Populates editable textarea in Task Form
+        ▼
+User reviews/edits suggestion before saving task to MongoDB
+```
+
+### Features Implemented
+
+1. **Secure Server-Side API Call:**
+   - OpenAI SDK (`openai`) & Google Gemini support implemented inside backend route `POST /api/ai/generate-description`.
+   - The API key (`OPENAI_API_KEY` / `GEMINI_API_KEY`) is stored strictly in `task-manager-api/.env` and never leaked to the client browser.
+2. **Graceful Degradation (Offline Resilience):**
+   - If the third-party AI API key is missing, invalid, or times out, the backend gracefully catches the exception and returns a contextual task description fallback without crashing or breaking the task creation workflow.
+3. **Editable Suggestion in React UI:**
+   - The AI description populates an editable `<textarea>`, allowing the user to review, edit, expand, or reject the suggestion before submitting.
+4. **Loading State & User Feedback:**
+   - Dynamic button state (`⏳ Generating...`) and loading status during API calls.
+5. **Rate Limiting (Supplementary Problem):**
+   - Enforces a 5-second cooldown per client/IP to prevent spam, quota exhaustion, and API abuse.
+6. **Responsible AI Disclaimer (Supplementary Problem):**
+   - A visible disclaimer badge: `🤖 AI-generated suggestion: Please review and modify before saving.`
+
+### Key Analysis & Viva Answers
+
+1. **Why must the AI API key be called from the backend rather than directly from the React frontend?**
+   - Client-side code runs in the user's browser, meaning any API key stored in React code or `.env` files with `VITE_` prefixes is completely visible in the browser's DevTools Network and Source tabs.
+   - Attackers can extract exposed keys to exhaust quotas or incur massive financial charges. Calling from the Node.js backend keeps the secret key secure on the server.
+2. **What does 'graceful degradation' mean in this context, and why does it matter?**
+   - Graceful degradation is the design pattern where an application continues to provide core functionality even when an external third-party dependency fails or becomes unavailable.
+   - For a task manager, AI generation is an enhancement, not the core function. If OpenAI/Gemini is down or the user is offline, the user can still create, edit, and manage tasks using fallback descriptions or manual input.
+3. **What are the privacy and governance implications of sending task data to an external AI API, and what kind of data should never be sent?**
+   - **Privacy Implications:** External AI providers may log prompts or use submitted data for model training unless specific zero-data retention agreements are in place.
+   - **Data to NEVER send:** Passwords, authentication tokens (JWTs), Personally Identifiable Information (PII) like Aadhaar/SSN numbers, financial records, medical records, or proprietary trade secrets.
+
+### Practical 13 Screenshot Evidence (Lab Submission)
+
+1. **Screenshot 1: AI Auto-Generate in Browser (Success)**
+   - Browser at `http://localhost:5173/tasks` showing a task title entered, the "✨ Auto-Generate with AI" button, the generated description in the editable textarea, and the AI disclaimer badge.
+2. **Screenshot 2: Network Tab Showing Secure Backend Call**
+   - Browser DevTools (F12) Network tab showing `POST http://localhost:5000/api/ai/generate-description` returning `200 OK` with JSON response containing description and disclaimer (no third-party OpenAI/Gemini secret key exposed in browser).
+3. **Screenshot 3: Loading State & Rate Limit Cooldown**
+   - Browser showing the disabled button state (`⏳ Cooldown (Xs)`) or loading state (`⏳ Generating...`).
+4. **Screenshot 4: Graceful Degradation / Fallback Demonstration**
+   - With `OPENAI_API_KEY` unset or invalid, clicking generate still succeeds gracefully, returning a contextual fallback description and displaying notice `Contextual description generated (Fallback mode)`.
+5. **Screenshot 5: Server-side Security (.env & .gitignore)**
+   - VS Code / Editor showing `OPENAI_API_KEY` stored in `.env` and `.env` included in `.gitignore` (never committed to GitHub).
+
+
 
 # React + Vite
 

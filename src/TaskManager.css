@@ -149,8 +149,105 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: #1157d6; trans
 
 .tm-toast { color: #17633c; background: #ecfdf3; border: 1px solid #b9f0d0; border-radius: 8px; padding: 9px 11px; margin-bottom: 12px; }
 
-.tm-loading {
-  color: #50607a;
+.tm-form-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  background: #f8fafc;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.tm-form-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.tm-ai-btn {
+  background: linear-gradient(135deg, #7928ca, #4338ca);
+  color: #ffffff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(121, 40, 202, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.tm-ai-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(121, 40, 202, 0.35);
+}
+
+.tm-ai-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  background: #94a3b8;
+}
+
+.tm-desc-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tm-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-family: inherit;
+  font-size: 13px;
+  color: #1e293b;
+  resize: vertical;
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.tm-textarea:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15);
+}
+
+.tm-ai-disclaimer {
+  font-size: 11px;
+  color: #6366f1;
+  background: #eef2ff;
+  border: 1px dashed #c7d2fe;
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tm-desc-text {
+  font-size: 13px;
+  color: #475569;
+  margin-top: 4px;
+  line-height: 1.4;
+  background: #f8fafc;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border-left: 3px solid #818cf8;
 }
 
 @media (max-width: 520px) {

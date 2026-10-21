@@ -39,4 +39,24 @@ describe('Task Management API CI Tests', () => {
     const res = await request(app).get('/non-existent-route');
     expect(res.statusCode).toBe(404);
   });
+
+  // Practical 13: AI Generation Endpoint Tests
+  test('POST /api/ai/generate-description returns 400 when title is missing', async () => {
+    const res = await request(app)
+      .post('/api/ai/generate-description')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({});
+    expect(res.statusCode).toBe(400);
+  });
+
+  test('POST /api/ai/generate-description returns 200 with generated description', async () => {
+    const res = await request(app)
+      .post('/api/ai/generate-description')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ title: 'Deploy to Kubernetes' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toHaveProperty('description');
+    expect(res.body.description.length).toBeGreaterThan(5);
+  });
 });
+
