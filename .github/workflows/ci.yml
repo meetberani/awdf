@@ -20,7 +20,7 @@ jobs:
           node-version: 20
 
       - name: Install Frontend Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Run Linter
         run: npm run lint
@@ -50,13 +50,13 @@ jobs:
           node-version: 20
 
       - name: Install Frontend Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Frontend Application
         run: npm run build
 
       - name: Install Backend Dependencies
-        run: npm --prefix task-manager-api install
+        run: npm --prefix task-manager-api install --legacy-peer-deps
 
       - name: Run Automated Tests
         env:
