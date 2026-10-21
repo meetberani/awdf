@@ -1,5 +1,7 @@
 # Student Portfolio Task Manager
 
+[![CI Pipeline](https://github.com/meetberani/awdf/actions/workflows/ci.yml/badge.svg)](https://github.com/meetberani/awdf/actions/workflows/ci.yml)
+
 Practical 6 full-stack integration: React + Vite frontend, Express/Mongoose backend, and MongoDB persistence.
 
 ## Architecture
@@ -324,6 +326,94 @@ Capture the following 6 screenshots for your lab record:
    - Docker Desktop application showing the `student-portfolio` container group running all 3 containers green, and the Volumes tab showing `mongodb_data`.
 6. **Screenshot 6: Data Persistence Verification**
    - Terminal showing `docker compose down` followed by `docker compose up -d`, and browser refresh showing tasks are preserved without loss.
+
+## Practical 12: CI/CD Pipeline with GitHub Actions (CO5 / PO3, PO5)
+
+Objective: To automate testing and deployment of the application using a CI/CD pipeline.
+
+- **GitHub Repository Actions Tab:** [https://github.com/meetberani/awdf/actions](https://github.com/meetberani/awdf/actions)
+- **Workflow File:** [.github/workflows/ci.yml](.github/workflows/ci.yml)
+
+### Pipeline Architecture
+
+```text
+git push origin main (or Pull Request)
+        │
+        ▼
+GitHub Actions Trigger (on: push, on: pull_request)
+        │
+        ▼
+Job 1: lint (Code Linting)
+   ├── Checkout repository (actions/checkout@v4)
+   ├── Setup Node.js 18 (actions/setup-node@v4)
+   ├── Install dependencies (npm install)
+   └── Run Linter (npm run lint)
+        │
+        ▼ (needs: lint)
+Job 2: build-and-test (Build & Automated Tests)
+   ├── Service: MongoDB 7 (official container with healthcheck)
+   ├── Checkout repository (actions/checkout@v4)
+   ├── Setup Node.js 18
+   ├── Install frontend & backend dependencies
+   ├── Build React Frontend (npm run build)
+   └── Run Automated Tests (npm test via Jest & Supertest)
+        │
+        ▼
+Result: Green Checkmark (Pass) or Red X (Fail) on GitHub Actions
+```
+
+### Automated Tests in CI
+
+The backend API includes automated integration tests in `task-manager-api/server.test.js`:
+1. `GET /tasks returns 200` (Authenticated request verifies task list retrieval)
+2. `GET /tasks returns 401 without authorization token` (Unauthenticated security check)
+3. `GET /non-existent-route returns 404` (Error handling verification)
+
+### Demonstrating Failed vs Passed Pipeline (Step 5 & 6)
+
+1. **Step 5 - Deliberately Break Test (Red X):**
+   - In `task-manager-api/server.test.js`, change `expect(res.statusCode).toBe(200)` to `expect(res.statusCode).toBe(500)`.
+   - Commit and push to GitHub:
+     ```powershell
+     git commit -am "test: deliberately fail test for CI demo"
+     git push origin main
+     ```
+   - Open [https://github.com/meetberani/awdf/actions](https://github.com/meetberani/awdf/actions) and observe the red X (Failed) status and error logs.
+2. **Step 6 - Fix the Test (Green Checkmark):**
+   - Revert back to `expect(res.statusCode).toBe(200)`.
+   - Commit and push:
+     ```powershell
+     git commit -am "test: fix broken test assertion"
+     git push origin main
+     ```
+   - Observe the workflow turn green (Passed).
+
+### Key Analysis & Viva Answers
+
+1. **What is the difference between Continuous Integration (CI) and Continuous Deployment (CD), and which one does this practical demonstrate?**
+   - **Continuous Integration (CI):** Automates merging code changes, installing dependencies, building the application, and running automated tests and linters on every commit to detect errors early.
+   - **Continuous Deployment (CD):** Automatically deploys every passing build directly to a production/staging environment without manual human intervention.
+   - **This Practical:** Specifically demonstrates **Continuous Integration (CI)** by triggering automated linting, building, and Jest testing on every push and pull request.
+2. **Why does running tests automatically on every push catch problems earlier than testing manually before a release?**
+   - Automated testing on each push provides instant feedback to developers within minutes of committing code.
+   - It isolates the exact commit that introduced a regression or bug, preventing bugs from accumulating and reducing debugging time significantly compared to manual pre-release testing.
+3. **What would happen to the pipeline if the test file path were incorrect? Would it fail at the same step?**
+   - If the test file path is incorrect, the testing tool (Jest) will either report "No tests found" (exiting with code 1) or the command will fail during test discovery.
+   - It fails during the test runner discovery phase rather than during assertion execution (`expect(...)`). An assertion failure produces a detailed diff (Expected vs Received), whereas an incorrect path error indicates a configuration or missing file failure.
+
+### Practical 12 Screenshot Evidence (Lab Submission)
+
+1. **Screenshot 1: GitHub Actions Workflow Run - Green / Passed**
+   - Actions tab showing the `CI Pipeline` workflow completed with a green checkmark on `main`.
+2. **Screenshot 2: GitHub Actions Workflow Run - Red / Failed**
+   - Actions tab showing the failed run caused by the deliberately broken test with a red cross (X).
+3. **Screenshot 3: Failed Test Logs in GitHub Actions**
+   - Detail view of the `build-and-test` job showing Jest output with expected vs received mismatch (e.g. `Expected 500, Received 200`).
+4. **Screenshot 4: Passed Test Logs & Jobs**
+   - Detail view showing both `lint` and `build-and-test` jobs completed successfully with green checkmarks.
+5. **Screenshot 5: Status Badge in README on GitHub**
+   - GitHub repository homepage showing the live `CI Pipeline: passing` badge.
+
 
 # React + Vite
 
