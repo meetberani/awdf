@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import Student from "./student";
+import Student from "./Student";
 import { Navigate, Routes, Route } from "react-router-dom";
 import NavBar from "./NavBar";
 import Auth from "./Auth";
