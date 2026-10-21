@@ -56,9 +56,98 @@ can become interactive before unused route code is downloaded.
 - For a very small app, the extra chunks and loading states may add more
   complexity than the startup savings justify.
 
+## Practical 9: In-Memory Caching and Query Optimization
+
+The backend uses `node-cache` for `GET /tasks` (`all_tasks`) and
+`GET /tasks/:id` (`task:<id>`), with a 60-second default TTL. Set
+`TASK_CACHE_TTL_SECONDS` to experiment with another positive TTL. Successful
+task creation clears the list key; successful updates and deletions clear the
+list key and affected task key. Cache hit/miss totals and current cache state
+are available at authenticated `GET /debug/cache`.
+
+Caching is enabled by default. Set `TASK_CACHE_ENABLED=false` in the backend
+environment to collect an uncached baseline without changing source code.
+Restart the backend between conditions to reset the in-memory counters and
+keys. Use the same account, task dataset, client, and network for both runs.
+For the cached condition, send one warm-up request, then record the next three
+`GET /tasks` response times. For the uncached condition, restart with caching
+disabled and record three `GET /tasks` response times. Include units from the
+client's Time field; do not compare the first cold-cache request as a hit.
+
+| Condition | Sample 1 (ms) | Sample 2 (ms) | Sample 3 (ms) | Average (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Uncached | 43.11 | 14.75 | 23.25 | 27.04 |
+| Cached (after warm-up) | 10.50 | 7.37 | 22.20 | 13.36 |
+
+These measurements were captured against localhost with Node's fetch API using
+the same MongoDB database and data: an uncached API instance on port 5001 and a
+cache-enabled instance on port 5000. One cold cached request took 171.22 ms and
+was excluded from the warmed-cache average. The enabled instance reported 3
+hits, 1 miss, and a 60-second TTL. This is a small local sample, not a
+performance guarantee; MongoDB, data size, and machine load change results.
+Repeat with Postman or Thunder Client on your own machine and replace the table
+if you need the lab-client readings. `/debug/cache` returns `hits`, `misses`,
+`enabled`, `keys`, and `ttlSeconds` to confirm which condition is running.
+
+Cache invalidation is necessary because otherwise a successful write could
+leave the old list or task value available until TTL expiry, so subsequent
+reads would return stale data. A 60-second TTL is a reasonable lab default for
+short-lived task lists; longer TTLs can improve hit rates but increase the
+maximum staleness window if a write bypasses invalidation. `node-cache` stores
+values in one Node.js process only. Multiple server instances have separate
+caches, so a write received by one instance would not invalidate another
+instance's cache; distributed deployments need shared caching or coordinated
+invalidation (for example Redis).
+
+## Practical 10: Asynchronous Processing with EventEmitter
+
+The backend uses Node.js's built-in `EventEmitter` from `events.js`; the
+separate `listeners.js` module is loaded once when the server starts. After a
+task is saved and the cache is invalidated, `POST /tasks` sends its `201`
+response, logs the response timestamp, and emits `task-created` with the task
+title, creation timestamp, and authenticated user's email (or ID). Its
+listener schedules the notification log 2 seconds later. A successful delete
+also emits `task-deleted`, which has a separate listener. Errors from the
+delayed create listener are emitted as `error` and logged by a registered
+error listener.
+
+Expected terminal evidence after creating a task:
+
+```text
+[API] POST /tasks response sent at <timestamp>
+[Notification] task-created handled at <timestamp about 2 seconds later> | title: "..." | created at: ... | assigned user: ...
+```
+
+Local verification with Node fetch returned `201 Created` in 187.25 ms. The
+API response log was at `2026-10-08T07:46:10.720Z`, and the delayed handler
+logged at `2026-10-08T07:46:12.724Z` (2.004 seconds later). These are sample
+localhost readings; your Postman response time will vary.
+
+`emit()` itself invokes registered listener callbacks synchronously; here the
+callback schedules the notification using `setTimeout` and returns without
+waiting for its delayed work. Thus the route can finish its response while
+the notification is pending. CPU-heavy synchronous work inside a listener
+would still block Node's event loop. An in-process EventEmitter is suitable
+for this small lab, but it is not a durable queue: events can be lost on
+process restart, and it does not distribute work across server instances.
+High-volume production systems generally use a persistent broker/queue.
+
+### Practical 10 screenshot evidence
+
+1. Capture the API terminal showing the `POST /tasks response sent` line
+  followed by the delayed `task-created handled` line and timestamps.
+2. Capture Postman showing authenticated `POST http://127.0.0.1:5000/tasks`,
+  the `201 Created` response, and response time.
+3. Capture a successful `DELETE /tasks/:id` response and the distinct
+  `task-deleted` terminal notification.
+4. Capture `task-manager-api/events.js` and `listeners.js` to show the native
+  emitter and separate listeners.
+
+Do not include the Bearer token or account password in screenshots.
+
 ## Prerequisites
 
-- Node.js 18 or newer
+- Node.js 20.19+ or 22.12+ for local frontend development
 - MongoDB running locally as the `MongoDB` Windows service
 
 ## Run the application
@@ -144,6 +233,98 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:5000/tasks' -Headers $headers
 - The backend validates content type and task IDs.
 - Mongoose validation and cast errors return structured JSON.
 - The frontend handles loading and errors for initial load and every write operation.
+
+## Practical 11: Docker and Docker Compose (CO5 / PO3, PO5)
+
+Objective: Containerize the full-stack Task Management application using Docker and orchestrate services using Docker Compose.
+
+### Architecture
+
+```text
+docker-compose.yml
+├── frontend (React + Vite served via Nginx multi-stage build, host:5173 -> container:80)
+├── backend (Node.js/Express, host:5000 -> container:5000)
+└── mongodb (Official MongoDB image, host:27017 -> container:27017, volume: mongodb_data)
+Network: app-network (bridge)
+Communication: frontend (browser) ──► backend ──► mongodb:27017
+All 3 services start together via: docker compose up --build
+```
+
+### Run the full stack
+
+1. Start Docker Desktop on your system.
+2. In the repository root, run:
+
+```powershell
+docker compose up --build
+# or using legacy docker-compose syntax:
+docker-compose up --build
+```
+
+3. Open `http://localhost:5173` in your browser. Register or log in to use the task manager.
+4. Verify backend API is reachable at `http://localhost:5000/tasks`.
+5. Compose waits for MongoDB's health check before starting the backend. The frontend image is built in two stages: Node builds the Vite app, and the final image serves only the static build with Nginx. Nginx falls back to `index.html` for client-side routes such as `/tasks`.
+6. To stop the containers, press `Ctrl+C` or run:
+
+```powershell
+docker compose down
+```
+
+7. Task data is kept in the named `mongodb_data` volume across container restarts. To intentionally delete that data as well, run:
+
+```powershell
+docker compose down --volumes
+```
+
+### Verification Commands
+
+- **Check running containers:**
+  ```powershell
+  docker ps
+  ```
+- **Inspect container logs:**
+  ```powershell
+  docker compose logs -f
+  ```
+- **Inspect created volumes:**
+  ```powershell
+  docker volume ls
+  ```
+- **Inspect bridge network:**
+  ```powershell
+  docker network inspect student-portfolio_app-network
+  ```
+
+### Key Analysis & Viva Answers
+
+1. **Why does the backend container need to reference the MongoDB container by its service name (`mongodb`) rather than `localhost`?**
+   - Each container runs in its own isolated network namespace with its own loopback address `localhost` (`127.0.0.1`). If backend tried to connect to `localhost:27017`, it would search inside its own container where no MongoDB process is listening.
+   - On the Docker bridge network (`app-network`), Docker provides an automatic embedded DNS server that resolves Compose service names (e.g., `mongodb`) to the respective container's internal IP address.
+2. **What is the difference between `EXPOSE` in a Dockerfile and the `ports` mapping in `docker-compose.yml`?**
+   - `EXPOSE`: Documents the port intended for communication. It acts as metadata and allows inter-container communication on shared networks, but does NOT publish the port to the host machine.
+   - `ports`: Binds and publishes a host port to the container port (e.g., `"5173:80"` maps host port 5173 to container port 80), making the service accessible from the outside host machine / browser.
+3. **Why is it considered bad practice to copy `node_modules` into a Docker image instead of running `npm install` inside the container?**
+   - Local `node_modules` may contain host-specific compiled binaries (e.g. Windows x64 vs Linux Alpine).
+   - Copying thousands of files bloats image size and slows down build context transfer time.
+   - Using `.dockerignore` to exclude `node_modules` and letting `npm install` run inside the container ensures clean, platform-compatible, deterministic dependencies.
+
+### Practical 11 Screenshot Evidence (Lab Submission)
+
+Capture the following 6 screenshots for your lab record:
+
+1. **Screenshot 1: Docker Version Check**
+   - Terminal showing `docker --version` and `docker compose version` (or `docker-compose version`).
+2. **Screenshot 2: Build & Start Stack**
+   - Terminal showing execution of `docker compose up --build` with all 3 containers building, healthy, and starting.
+3. **Screenshot 3: Running Containers (`docker ps`)**
+   - Terminal showing `docker ps` with all 3 containers (`frontend`, `backend`, `mongodb`) showing status `Up` / `healthy` and proper port mappings (`5173:80`, `5000:5000`, `27017:27017`).
+4. **Screenshot 4: Running Frontend in Browser**
+   - Web browser open at `http://localhost:5173` showing the Task Manager UI with logged-in user and added tasks.
+5. **Screenshot 5: Docker Desktop GUI (Optional / Recommended)**
+   - Docker Desktop application showing the `student-portfolio` container group running all 3 containers green, and the Volumes tab showing `mongodb_data`.
+6. **Screenshot 6: Data Persistence Verification**
+   - Terminal showing `docker compose down` followed by `docker compose up -d`, and browser refresh showing tasks are preserved without loss.
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
