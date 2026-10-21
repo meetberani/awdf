@@ -58,7 +58,7 @@ const requireAuth = (req, res, next) => {
     try {
         req.user = jwt.verify(token, jwtSecret);
         next();
-    } catch (err) {
+    } catch {
         return res.status(401).json({ error: 'Invalid or expired token' });
     }
 };
@@ -228,7 +228,7 @@ app.use((req, res) => {
 });
 
 // Structured error handler
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
     console.error(err);
     if (err.name === 'ValidationError') {
         const errors = Object.keys(err.errors).reduce((acc, key) => {
